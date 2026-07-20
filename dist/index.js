@@ -12686,9 +12686,9 @@
     const [previewUrl, setPreviewUrl] = reactExports.useState("");
     const [outputSize, setOutputSize] = reactExports.useState(256);
     const [isConverting, setIsConverting] = reactExports.useState(false);
-    const [savePath, setSavePath] = reactExports.useState("");
+    const [saveFolder, setSaveFolder] = reactExports.useState("");
     const fileInputRef = reactExports.useRef(null);
-    const sizes = [16, 32, 48, 64, 128, 256, 512];
+    const icoSizes = [16, 32, 48, 64, 128, 256];
     reactExports.useEffect(() => {
       return () => {
         if (previewUrl) {
@@ -12795,6 +12795,19 @@
         handleSvgPreview();
       }
     }, [handleSvgPreview]);
+    const getImageDimensions = reactExports.useCallback((imgUrl) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          resolve({ width: img.width, height: img.height });
+          URL.revokeObjectURL(imgUrl);
+        };
+        img.onerror = () => {
+          resolve({ width: outputSize, height: outputSize });
+        };
+        img.src = imgUrl;
+      });
+    }, [outputSize]);
     const convertSvgToCanvas = reactExports.useCallback(async (svgString, width, height) => {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -12880,37 +12893,30 @@
       });
       return buffer;
     }, []);
-    const handleSelectSavePath = reactExports.useCallback(async () => {
+    const handleSelectSaveFolder = reactExports.useCallback(async () => {
       try {
         const electronApi = window.electron;
-        if (electronApi && electronApi.fileManager && electronApi.fileManager.showSaveDialog) {
-          const result = await electronApi.fileManager.showSaveDialog({
-            title: "选择保存路径",
-            defaultPath: outputFormat === "png" ? "converted.png" : "converted.ico",
-            filters: [
-              { name: outputFormat.toUpperCase(), extensions: [outputFormat] },
-              { name: "所有文件", extensions: ["*"] }
-            ]
-          });
-          if (result && !result.canceled && result.filePath) {
-            setSavePath(result.filePath);
-            addToast({ message: `已选择保存路径: ${result.filePath}`, type: "success" });
+        if (electronApi && electronApi.selectFolder) {
+          const result = await electronApi.selectFolder();
+          if (result) {
+            setSaveFolder(result);
+            addToast({ message: `已选择保存目录: ${result}`, type: "success" });
           }
         } else {
-          addToast({ message: "当前环境不支持文件对话框", type: "warning" });
+          addToast({ message: "当前环境不支持文件夹选择", type: "warning" });
         }
       } catch (error) {
-        addToast({ message: `选择路径失败: ${error.message}`, type: "error" });
+        addToast({ message: `选择目录失败: ${error.message}`, type: "error" });
       }
-    }, [addToast, outputFormat]);
+    }, [addToast]);
     const saveBlobToFile = reactExports.useCallback(async (blob, fileName) => {
       var _a;
       try {
         const electronApi = window.electron;
-        if (electronApi && electronApi.fileManager && electronApi.fileManager.writeFile) {
+        if (electronApi && electronApi.ipcRenderer && electronApi.ipcRenderer.invoke) {
           const arrayBuffer = await blob.arrayBuffer();
-          const filePath = savePath || `./${fileName}`;
-          await electronApi.fileManager.writeFile(filePath, Buffer.from(arrayBuffer));
+          const filePath = saveFolder ? `${saveFolder}/${fileName}` : `./${fileName}`;
+          await electronApi.ipcRenderer.invoke("plugin:save-file", { path: filePath, data: Buffer.from(arrayBuffer) });
           addToast({ message: `文件已保存到: ${filePath}`, type: "success" });
           return true;
         }
@@ -12927,7 +12933,7 @@
       URL.revokeObjectURL(url);
       addToast({ message: `图片已转换为${(_a = fileName.split(".").pop()) == null ? void 0 : _a.toUpperCase()}并下载`, type: "success" });
       return true;
-    }, [savePath, addToast]);
+    }, [saveFolder, addToast]);
     const handleConvert = reactExports.useCallback(async () => {
       setIsConverting(true);
       try {
@@ -12954,10 +12960,19 @@
           }
         }
         let canvas;
-        if (inputType === "svg") {
-          canvas = await convertSvgToCanvas(svgCode, outputSize, outputSize);
+        if (outputFormat === "png") {
+          if (inputType === "svg") {
+            canvas = await convertSvgToCanvas(svgCode, 1024, 1024);
+          } else {
+            const dims = await getImageDimensions(currentPreviewUrl);
+            canvas = await convertImageToCanvas(currentPreviewUrl, dims.width, dims.height);
+          }
         } else {
-          canvas = await convertImageToCanvas(currentPreviewUrl, outputSize, outputSize);
+          if (inputType === "svg") {
+            canvas = await convertSvgToCanvas(svgCode, outputSize, outputSize);
+          } else {
+            canvas = await convertImageToCanvas(currentPreviewUrl, outputSize, outputSize);
+          }
         }
         let blob;
         let fileName;
@@ -12975,7 +12990,7 @@
       } finally {
         setIsConverting(false);
       }
-    }, [previewUrl, inputType, svgCode, imageUrl, outputSize, outputFormat, addToast, convertSvgToCanvas, convertImageToCanvas, canvasToIco, loadSvgPreview, loadUrlPreview, saveBlobToFile]);
+    }, [previewUrl, inputType, svgCode, imageUrl, outputSize, outputFormat, addToast, convertSvgToCanvas, convertImageToCanvas, canvasToIco, loadSvgPreview, loadUrlPreview, saveBlobToFile, getImageDimensions]);
     const handleClear = reactExports.useCallback(() => {
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
@@ -12983,7 +12998,7 @@
       setPreviewUrl("");
       setImageUrl("");
       setSvgCode(SAMPLE_SVG);
-      setSavePath("");
+      setSaveFolder("");
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -13081,7 +13096,7 @@
         className: `flex-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${outputFormat === "ico" ? "bg-blue-500 text-white" : "bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500"}`
       },
       "ICO"
-    ))), /* @__PURE__ */ React$2.createElement("div", { className: "mb-2" }, /* @__PURE__ */ React$2.createElement("label", { className: "text-xs text-gray-600 dark:text-gray-400 mb-1 block" }, "输出尺寸: ", outputSize, "px"), /* @__PURE__ */ React$2.createElement("div", { className: "flex flex-wrap gap-1" }, sizes.map((size) => /* @__PURE__ */ React$2.createElement(
+    ))), outputFormat === "ico" && /* @__PURE__ */ React$2.createElement("div", { className: "mb-2" }, /* @__PURE__ */ React$2.createElement("label", { className: "text-xs text-gray-600 dark:text-gray-400 mb-1 block" }, "图标尺寸: ", outputSize, "px"), /* @__PURE__ */ React$2.createElement("div", { className: "flex flex-wrap gap-1" }, icoSizes.map((size) => /* @__PURE__ */ React$2.createElement(
       "button",
       {
         key: size,
@@ -13089,21 +13104,21 @@
         className: `px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${outputSize === size ? "bg-blue-500 text-white" : "bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500"}`
       },
       size
-    )))), /* @__PURE__ */ React$2.createElement("div", null, /* @__PURE__ */ React$2.createElement("label", { className: "text-xs text-gray-600 dark:text-gray-400 mb-1 block" }, "保存路径"), /* @__PURE__ */ React$2.createElement("div", { className: "flex gap-1.5" }, /* @__PURE__ */ React$2.createElement(
+    )))), /* @__PURE__ */ React$2.createElement("div", null, /* @__PURE__ */ React$2.createElement("label", { className: "text-xs text-gray-600 dark:text-gray-400 mb-1 block" }, "保存目录"), /* @__PURE__ */ React$2.createElement("div", { className: "flex gap-1.5" }, /* @__PURE__ */ React$2.createElement(
       "input",
       {
         type: "text",
-        value: savePath,
+        value: saveFolder,
         readOnly: true,
         className: "flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs focus:outline-none",
-        placeholder: "点击选择路径..."
+        placeholder: "点击选择目录..."
       }
     ), /* @__PURE__ */ React$2.createElement(
       "button",
       {
-        onClick: handleSelectSavePath,
+        onClick: handleSelectSaveFolder,
         className: "px-1.5 py-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors",
-        title: "选择保存路径"
+        title: "选择保存目录"
       },
       /* @__PURE__ */ React$2.createElement(FolderOpen, { className: "w-3.5 h-3.5" })
     )))), /* @__PURE__ */ React$2.createElement("div", { className: "flex gap-1.5" }, /* @__PURE__ */ React$2.createElement(
@@ -13122,7 +13137,7 @@
       },
       isConverting ? /* @__PURE__ */ React$2.createElement(RefreshCw, { className: "w-3.5 h-3.5 animate-spin" }) : /* @__PURE__ */ React$2.createElement(Download, { className: "w-3.5 h-3.5" }),
       isConverting ? "转换中..." : "转换并保存"
-    ))), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 flex flex-col gap-3 overflow-hidden" }, /* @__PURE__ */ React$2.createElement("div", { className: "bg-gray-50 dark:bg-gray-700 rounded-lg p-2.5" }, /* @__PURE__ */ React$2.createElement("div", { className: "flex items-center justify-between mb-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-xs font-medium text-gray-700 dark:text-gray-300" }, "预览"), previewUrl && /* @__PURE__ */ React$2.createElement("span", { className: "text-xs text-gray-500 dark:text-gray-500" }, "格式: ", inputType === "svg" ? "SVG" : outputFormat.toUpperCase(), " | 尺寸: ", outputSize, "px")), /* @__PURE__ */ React$2.createElement(
+    ))), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 flex flex-col gap-3 overflow-hidden" }, /* @__PURE__ */ React$2.createElement("div", { className: "bg-gray-50 dark:bg-gray-700 rounded-lg p-2.5" }, /* @__PURE__ */ React$2.createElement("div", { className: "flex items-center justify-between mb-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-xs font-medium text-gray-700 dark:text-gray-300" }, "预览"), previewUrl && /* @__PURE__ */ React$2.createElement("span", { className: "text-xs text-gray-500 dark:text-gray-500" }, "格式: ", inputType === "svg" ? "SVG" : outputFormat.toUpperCase(), outputFormat === "ico" && ` | 尺寸: ${outputSize}px`)), /* @__PURE__ */ React$2.createElement(
       "div",
       {
         className: "w-full h-56 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center overflow-hidden"
@@ -13136,7 +13151,7 @@
           style: { maxHeight: "100%", maxWidth: "100%" }
         }
       ) : /* @__PURE__ */ React$2.createElement("div", { className: "text-center" }, /* @__PURE__ */ React$2.createElement(Image, { className: "w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-1.5" }), /* @__PURE__ */ React$2.createElement("p", { className: "text-xs text-gray-500 dark:text-gray-500" }, "暂无预览"), /* @__PURE__ */ React$2.createElement("p", { className: "text-xs text-gray-400 dark:text-gray-600 mt-0.5" }, "请选择或加载图片"))
-    )), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-auto p-3" }, /* @__PURE__ */ React$2.createElement("h3", { className: "text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2" }, "使用说明"), /* @__PURE__ */ React$2.createElement("ul", { className: "space-y-1.5 text-xs text-gray-600 dark:text-gray-400" }, /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "1."), /* @__PURE__ */ React$2.createElement("span", null, "选择输入方式：本地图片、网络图片或SVG代码")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "2."), /* @__PURE__ */ React$2.createElement("span", null, "上传图片或输入URL/SVG代码，预览区会显示效果")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "3."), /* @__PURE__ */ React$2.createElement("span", null, "选择输出格式（PNG或ICO）和尺寸")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "4."), /* @__PURE__ */ React$2.createElement("span", null, "选择保存路径（可选）")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "5."), /* @__PURE__ */ React$2.createElement("span", null, '点击"转换并保存"按钮完成转换'))), /* @__PURE__ */ React$2.createElement("div", { className: "mt-3 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg" }, /* @__PURE__ */ React$2.createElement("h4", { className: "text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" }, "注意事项"), /* @__PURE__ */ React$2.createElement("ul", { className: "space-y-1 text-xs text-gray-500 dark:text-gray-500" }, /* @__PURE__ */ React$2.createElement("li", null, "- SVG代码必须包含完整的<svg>标签"), /* @__PURE__ */ React$2.createElement("li", null, "- 网络图片需要支持跨域访问（CORS）"), /* @__PURE__ */ React$2.createElement("li", null, "- ICO格式会自动生成多尺寸图标（16x16~256x256）"))))))));
+    )), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-auto p-3" }, /* @__PURE__ */ React$2.createElement("h3", { className: "text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2" }, "使用说明"), /* @__PURE__ */ React$2.createElement("ul", { className: "space-y-1.5 text-xs text-gray-600 dark:text-gray-400" }, /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "1."), /* @__PURE__ */ React$2.createElement("span", null, "选择输入方式：本地图片、网络图片或SVG代码")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "2."), /* @__PURE__ */ React$2.createElement("span", null, "上传图片或输入URL/SVG代码，预览区会显示效果")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "3."), /* @__PURE__ */ React$2.createElement("span", null, "选择输出格式（PNG保持原尺寸，ICO可选择尺寸）")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "4."), /* @__PURE__ */ React$2.createElement("span", null, "选择保存目录（可选）")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "5."), /* @__PURE__ */ React$2.createElement("span", null, '点击"转换并保存"按钮完成转换'))), /* @__PURE__ */ React$2.createElement("div", { className: "mt-3 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg" }, /* @__PURE__ */ React$2.createElement("h4", { className: "text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" }, "注意事项"), /* @__PURE__ */ React$2.createElement("ul", { className: "space-y-1 text-xs text-gray-500 dark:text-gray-500" }, /* @__PURE__ */ React$2.createElement("li", null, "- SVG代码必须包含完整的<svg>标签"), /* @__PURE__ */ React$2.createElement("li", null, "- 网络图片需要支持跨域访问（CORS）"), /* @__PURE__ */ React$2.createElement("li", null, "- PNG格式保持原图片尺寸，不进行缩放"), /* @__PURE__ */ React$2.createElement("li", null, "- ICO格式会自动生成多尺寸图标（16x16~256x256）"))))))));
   };
   const PluginApp = () => {
     return React$2.createElement(ToolPanel);

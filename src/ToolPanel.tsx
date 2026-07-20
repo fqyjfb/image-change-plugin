@@ -59,11 +59,11 @@ const ToolPanel: FC = () => {
   const [previewUrl, setPreviewUrl] = useState('');
   const [outputSize, setOutputSize] = useState(256);
   const [isConverting, setIsConverting] = useState(false);
-  const [savePath, setSavePath] = useState('');
+  const [saveFolder, setSaveFolder] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const sizes = [16, 32, 48, 64, 128, 256, 512];
+  const icoSizes = [16, 32, 48, 64, 128, 256];
 
   useEffect(() => {
     return () => {
@@ -183,6 +183,20 @@ const ToolPanel: FC = () => {
     }
   }, [handleSvgPreview]);
 
+  const getImageDimensions = useCallback((imgUrl: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({ width: img.width, height: img.height });
+        URL.revokeObjectURL(imgUrl);
+      };
+      img.onerror = () => {
+        resolve({ width: outputSize, height: outputSize });
+      };
+      img.src = imgUrl;
+    });
+  }, [outputSize]);
+
   const convertSvgToCanvas = useCallback(async (svgString: string, width: number, height: number): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -288,38 +302,30 @@ const ToolPanel: FC = () => {
     return buffer;
   }, []);
 
-  const handleSelectSavePath = useCallback(async () => {
+  const handleSelectSaveFolder = useCallback(async () => {
     try {
       const electronApi = (window as any).electron;
-      if (electronApi && electronApi.fileManager && electronApi.fileManager.showSaveDialog) {
-        const result = await electronApi.fileManager.showSaveDialog({
-          title: '选择保存路径',
-          defaultPath: outputFormat === 'png' ? 'converted.png' : 'converted.ico',
-          filters: [
-            { name: outputFormat.toUpperCase(), extensions: [outputFormat] },
-            { name: '所有文件', extensions: ['*'] }
-          ]
-        });
-        
-        if (result && !result.canceled && result.filePath) {
-          setSavePath(result.filePath);
-          addToast({ message: `已选择保存路径: ${result.filePath}`, type: 'success' });
+      if (electronApi && electronApi.selectFolder) {
+        const result = await electronApi.selectFolder();
+        if (result) {
+          setSaveFolder(result);
+          addToast({ message: `已选择保存目录: ${result}`, type: 'success' });
         }
       } else {
-        addToast({ message: '当前环境不支持文件对话框', type: 'warning' });
+        addToast({ message: '当前环境不支持文件夹选择', type: 'warning' });
       }
     } catch (error) {
-      addToast({ message: `选择路径失败: ${(error as Error).message}`, type: 'error' });
+      addToast({ message: `选择目录失败: ${(error as Error).message}`, type: 'error' });
     }
-  }, [addToast, outputFormat]);
+  }, [addToast]);
 
   const saveBlobToFile = useCallback(async (blob: Blob, fileName: string): Promise<boolean> => {
     try {
       const electronApi = (window as any).electron;
-      if (electronApi && electronApi.fileManager && electronApi.fileManager.writeFile) {
+      if (electronApi && electronApi.ipcRenderer && electronApi.ipcRenderer.invoke) {
         const arrayBuffer = await blob.arrayBuffer();
-        const filePath = savePath || `./${fileName}`;
-        await electronApi.fileManager.writeFile(filePath, Buffer.from(arrayBuffer));
+        const filePath = saveFolder ? `${saveFolder}/${fileName}` : `./${fileName}`;
+        await electronApi.ipcRenderer.invoke('plugin:save-file', { path: filePath, data: Buffer.from(arrayBuffer) });
         addToast({ message: `文件已保存到: ${filePath}`, type: 'success' });
         return true;
       }
@@ -337,7 +343,7 @@ const ToolPanel: FC = () => {
     URL.revokeObjectURL(url);
     addToast({ message: `图片已转换为${fileName.split('.').pop()?.toUpperCase()}并下载`, type: 'success' });
     return true;
-  }, [savePath, addToast]);
+  }, [saveFolder, addToast]);
 
   const handleConvert = useCallback(async () => {
     setIsConverting(true);
@@ -368,10 +374,19 @@ const ToolPanel: FC = () => {
 
       let canvas: HTMLCanvasElement;
       
-      if (inputType === 'svg') {
-        canvas = await convertSvgToCanvas(svgCode, outputSize, outputSize);
+      if (outputFormat === 'png') {
+        if (inputType === 'svg') {
+          canvas = await convertSvgToCanvas(svgCode, 1024, 1024);
+        } else {
+          const dims = await getImageDimensions(currentPreviewUrl);
+          canvas = await convertImageToCanvas(currentPreviewUrl, dims.width, dims.height);
+        }
       } else {
-        canvas = await convertImageToCanvas(currentPreviewUrl, outputSize, outputSize);
+        if (inputType === 'svg') {
+          canvas = await convertSvgToCanvas(svgCode, outputSize, outputSize);
+        } else {
+          canvas = await convertImageToCanvas(currentPreviewUrl, outputSize, outputSize);
+        }
       }
 
       let blob: Blob;
@@ -392,7 +407,7 @@ const ToolPanel: FC = () => {
     } finally {
       setIsConverting(false);
     }
-  }, [previewUrl, inputType, svgCode, imageUrl, outputSize, outputFormat, addToast, convertSvgToCanvas, convertImageToCanvas, canvasToIco, loadSvgPreview, loadUrlPreview, saveBlobToFile]);
+  }, [previewUrl, inputType, svgCode, imageUrl, outputSize, outputFormat, addToast, convertSvgToCanvas, convertImageToCanvas, canvasToIco, loadSvgPreview, loadUrlPreview, saveBlobToFile, getImageDimensions]);
 
   const handleClear = useCallback(() => {
     if (previewUrl) {
@@ -401,7 +416,7 @@ const ToolPanel: FC = () => {
     setPreviewUrl('');
     setImageUrl('');
     setSvgCode(SAMPLE_SVG);
-    setSavePath('');
+    setSaveFolder('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -551,39 +566,41 @@ const ToolPanel: FC = () => {
                 </div>
               </div>
 
-              <div className="mb-2">
-                <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">输出尺寸: {outputSize}px</label>
-                <div className="flex flex-wrap gap-1">
-                  {sizes.map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setOutputSize(size)}
-                      className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${
-                        outputSize === size
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500'
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+              {outputFormat === 'ico' && (
+                <div className="mb-2">
+                  <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">图标尺寸: {outputSize}px</label>
+                  <div className="flex flex-wrap gap-1">
+                    {icoSizes.map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => setOutputSize(size)}
+                        className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${
+                          outputSize === size
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500'
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
-                <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">保存路径</label>
+                <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">保存目录</label>
                 <div className="flex gap-1.5">
                   <input
                     type="text"
-                    value={savePath}
+                    value={saveFolder}
                     readOnly
                     className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs focus:outline-none"
-                    placeholder="点击选择路径..."
+                    placeholder="点击选择目录..."
                   />
                   <button
-                    onClick={handleSelectSavePath}
+                    onClick={handleSelectSaveFolder}
                     className="px-1.5 py-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
-                    title="选择保存路径"
+                    title="选择保存目录"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                   </button>
@@ -619,7 +636,8 @@ const ToolPanel: FC = () => {
                 <span className="text-xs font-medium text-gray-700 dark:text-gray-300">预览</span>
                 {previewUrl && (
                   <span className="text-xs text-gray-500 dark:text-gray-500">
-                    格式: {inputType === 'svg' ? 'SVG' : outputFormat.toUpperCase()} | 尺寸: {outputSize}px
+                    格式: {inputType === 'svg' ? 'SVG' : outputFormat.toUpperCase()}
+                    {outputFormat === 'ico' && ` | 尺寸: ${outputSize}px`}
                   </span>
                 )}
               </div>
@@ -656,11 +674,11 @@ const ToolPanel: FC = () => {
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-blue-500">3.</span>
-                  <span>选择输出格式（PNG或ICO）和尺寸</span>
+                  <span>选择输出格式（PNG保持原尺寸，ICO可选择尺寸）</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-blue-500">4.</span>
-                  <span>选择保存路径（可选）</span>
+                  <span>选择保存目录（可选）</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-blue-500">5.</span>
@@ -673,6 +691,7 @@ const ToolPanel: FC = () => {
                 <ul className="space-y-1 text-xs text-gray-500 dark:text-gray-500">
                   <li>- SVG代码必须包含完整的&lt;svg&gt;标签</li>
                   <li>- 网络图片需要支持跨域访问（CORS）</li>
+                  <li>- PNG格式保持原图片尺寸，不进行缩放</li>
                   <li>- ICO格式会自动生成多尺寸图标（16x16~256x256）</li>
                 </ul>
               </div>
