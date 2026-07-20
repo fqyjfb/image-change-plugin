@@ -12913,15 +12913,16 @@
       var _a;
       try {
         const electronApi = window.electron;
-        if (electronApi && electronApi.ipcRenderer && electronApi.ipcRenderer.invoke) {
+        if (electronApi && electronApi.plugin && electronApi.plugin.saveFile) {
           const arrayBuffer = await blob.arrayBuffer();
           const filePath = saveFolder ? `${saveFolder}/${fileName}` : `./${fileName}`;
-          await electronApi.ipcRenderer.invoke("plugin:save-file", { path: filePath, data: Buffer.from(arrayBuffer) });
+          await electronApi.plugin.saveFile(filePath, new Uint8Array(arrayBuffer));
           addToast({ message: `文件已保存到: ${filePath}`, type: "success" });
           return true;
         }
       } catch (error) {
         addToast({ message: `保存失败: ${error.message}`, type: "error" });
+        return false;
       }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
