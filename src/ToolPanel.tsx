@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, FC, ChangeEvent, KeyboardEvent, DragEvent, useEffect } from 'react';
-import { Image, Upload, Link, Code, Download, Eye, RefreshCw, Settings, FolderOpen } from 'lucide-react';
+import { Image as ImageIcon, Upload, Link, Code, Download, Eye, RefreshCw, Settings, FolderOpen } from 'lucide-react';
 
 interface ToastItem {
   id: string;
@@ -428,7 +428,7 @@ const ToolPanel: FC = () => {
       <ToastContainer toasts={toasts} />
       
       <div className="flex items-center gap-2 mb-3">
-        <Image className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+        <ImageIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
         <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">图片转换</h2>
       </div>
 
@@ -653,7 +653,7 @@ const ToolPanel: FC = () => {
                   />
                 ) : (
                   <div className="text-center">
-                    <Image className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-1.5" />
+                    <ImageIcon className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-1.5" />
                     <p className="text-xs text-gray-500 dark:text-gray-500">暂无预览</p>
                     <p className="text-xs text-gray-400 dark:text-gray-600 mt-0.5">请选择或加载图片</p>
                   </div>
