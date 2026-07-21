@@ -21,16 +21,11 @@ jobs:
         with:
           node-version: '24.x'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Build plugin
-        run: pnpm run build
+        run: node build.mjs
 
       - name: Create zip archive
         run: zip -r plugin-image-change.zip dist manifest.json
