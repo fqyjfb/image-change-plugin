@@ -20,8 +20,6 @@ function renderStandalone() {
 
   if (ReactDOM.createRoot) {
     ReactDOM.createRoot(root).render(React.createElement(PluginApp));
-  } else {
-    ReactDOM.render(React.createElement(PluginApp), root);
   }
 }
 

@@ -12493,9 +12493,26 @@
    * This source code is licensed under the ISC license.
    * See the LICENSE file in the root directory of this source tree.
    */
+  const Check = createLucideIcon("Check", [["path", { d: "M20 6 9 17l-5-5", key: "1gmf2c" }]]);
+  /**
+   * @license lucide-react v0.454.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
   const Code = createLucideIcon("Code", [
     ["polyline", { points: "16 18 22 12 16 6", key: "z7tu5w" }],
     ["polyline", { points: "8 6 2 12 8 18", key: "1eg1df" }]
+  ]);
+  /**
+   * @license lucide-react v0.454.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
+  const Copy = createLucideIcon("Copy", [
+    ["rect", { width: "14", height: "14", x: "8", y: "8", rx: "2", ry: "2", key: "17jyea" }],
+    ["path", { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2", key: "zix9uf" }]
   ]);
   /**
    * @license lucide-react v0.454.0 - ISC
@@ -12638,6 +12655,8 @@
     const [outputSize, setOutputSize] = reactExports.useState(256);
     const [isConverting, setIsConverting] = reactExports.useState(false);
     const [saveFolder, setSaveFolder] = reactExports.useState("");
+    const [base64Result, setBase64Result] = reactExports.useState("");
+    const [copied, setCopied] = reactExports.useState(false);
     const fileInputRef = reactExports.useRef(null);
     const icoSizes = [16, 32, 48, 64, 128, 256];
     reactExports.useEffect(() => {
@@ -12662,6 +12681,28 @@
       };
       reader.readAsDataURL(file);
     }, [addToast, previewUrl]);
+    const handlePaste = reactExports.useCallback((e) => {
+      var _a;
+      if (inputType !== "local") return;
+      const items = (_a = e.clipboardData) == null ? void 0 : _a.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            handleFileSelect(file);
+            e.preventDefault();
+            break;
+          }
+        }
+      }
+    }, [inputType, handleFileSelect]);
+    reactExports.useEffect(() => {
+      const onPaste = (e) => handlePaste(e);
+      window.addEventListener("paste", onPaste);
+      return () => window.removeEventListener("paste", onPaste);
+    }, [handlePaste]);
     const handleInputChange = reactExports.useCallback((e) => {
       var _a;
       const file = (_a = e.target.files) == null ? void 0 : _a[0];
@@ -12886,30 +12927,49 @@
       addToast({ message: `图片已转换为${(_a = fileName.split(".").pop()) == null ? void 0 : _a.toUpperCase()}并下载`, type: "success" });
       return true;
     }, [saveFolder, addToast]);
+    const handleCopyBase64 = reactExports.useCallback(async () => {
+      if (!base64Result) return;
+      try {
+        await navigator.clipboard.writeText(base64Result);
+        setCopied(true);
+        addToast({ message: "Base64 已复制到剪贴板", type: "success" });
+        setTimeout(() => setCopied(false), 2e3);
+      } catch {
+        addToast({ message: "复制失败", type: "error" });
+      }
+    }, [base64Result, addToast]);
     const handleConvert = reactExports.useCallback(async () => {
       setIsConverting(true);
       try {
         let currentPreviewUrl = previewUrl;
         if (!currentPreviewUrl) {
           if (inputType === "svg") {
-            currentPreviewUrl = loadSvgPreview(svgCode);
-            if (!currentPreviewUrl) {
+            const svgUrl = loadSvgPreview(svgCode);
+            if (!svgUrl) {
               addToast({ message: "无效的SVG代码", type: "error" });
               setIsConverting(false);
               return;
             }
+            currentPreviewUrl = svgUrl;
           } else if (inputType === "url") {
-            currentPreviewUrl = await loadUrlPreview(imageUrl);
-            if (!currentPreviewUrl) {
+            const urlPreview = await loadUrlPreview(imageUrl);
+            if (!urlPreview) {
               addToast({ message: "加载图片失败", type: "error" });
               setIsConverting(false);
               return;
             }
+            currentPreviewUrl = urlPreview;
           } else {
             addToast({ message: "请先选择或加载图片", type: "warning" });
             setIsConverting(false);
             return;
           }
+        }
+        if (outputFormat === "base64") {
+          setBase64Result(currentPreviewUrl);
+          addToast({ message: "Base64 编码完成", type: "success" });
+          setIsConverting(false);
+          return;
         }
         let canvas;
         if (outputFormat === "png") {
@@ -12929,7 +12989,12 @@
         let blob;
         let fileName;
         if (outputFormat === "png") {
-          blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+          blob = await new Promise((resolve, reject) => {
+            canvas.toBlob((b) => {
+              if (b) resolve(b);
+              else reject(new Error("PNG转换失败"));
+            }, "image/png");
+          });
           fileName = `converted_${Date.now()}.png`;
         } else {
           const icoBuffer = canvasToIco(canvas);
@@ -12951,6 +13016,8 @@
       setImageUrl("");
       setSvgCode(SAMPLE_SVG);
       setSaveFolder("");
+      setBase64Result("");
+      setCopied(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -12999,7 +13066,8 @@
       ),
       /* @__PURE__ */ React$2.createElement(Upload, { className: "w-10 h-10 text-gray-400 dark:text-gray-500 mb-2" }),
       /* @__PURE__ */ React$2.createElement("span", { className: "text-xs text-gray-600 dark:text-gray-400" }, "点击或拖拽上传"),
-      /* @__PURE__ */ React$2.createElement("span", { className: "text-xs text-gray-500 dark:text-gray-500 mt-0.5" }, "支持 JPG、PNG、GIF、SVG")
+      /* @__PURE__ */ React$2.createElement("span", { className: "text-xs text-gray-500 dark:text-gray-500 mt-0.5" }, "支持 JPG、PNG、GIF、SVG"),
+      /* @__PURE__ */ React$2.createElement("span", { className: "text-xs text-gray-500 dark:text-gray-500 mt-0.5" }, "或 Ctrl+V 粘贴剪贴板图片")
     )), inputType === "url" && /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 flex flex-col gap-2" }, /* @__PURE__ */ React$2.createElement("div", { className: "relative" }, /* @__PURE__ */ React$2.createElement(
       "input",
       {
@@ -13048,6 +13116,13 @@
         className: `flex-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${outputFormat === "ico" ? "bg-blue-500 text-white" : "bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500"}`
       },
       "ICO"
+    ), /* @__PURE__ */ React$2.createElement(
+      "button",
+      {
+        onClick: () => setOutputFormat("base64"),
+        className: `flex-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${outputFormat === "base64" ? "bg-blue-500 text-white" : "bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500"}`
+      },
+      "Base64"
     ))), outputFormat === "ico" && /* @__PURE__ */ React$2.createElement("div", { className: "mb-2" }, /* @__PURE__ */ React$2.createElement("label", { className: "text-xs text-gray-600 dark:text-gray-400 mb-1 block" }, "图标尺寸: ", outputSize, "px"), /* @__PURE__ */ React$2.createElement("div", { className: "flex flex-wrap gap-1" }, icoSizes.map((size) => /* @__PURE__ */ React$2.createElement(
       "button",
       {
@@ -13089,7 +13164,7 @@
       },
       isConverting ? /* @__PURE__ */ React$2.createElement(RefreshCw, { className: "w-3.5 h-3.5 animate-spin" }) : /* @__PURE__ */ React$2.createElement(Download, { className: "w-3.5 h-3.5" }),
       isConverting ? "转换中..." : "转换并保存"
-    ))), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 flex flex-col gap-3 overflow-hidden" }, /* @__PURE__ */ React$2.createElement("div", { className: "bg-gray-50 dark:bg-gray-700 rounded-lg p-2.5" }, /* @__PURE__ */ React$2.createElement("div", { className: "flex items-center justify-between mb-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-xs font-medium text-gray-700 dark:text-gray-300" }, "预览"), previewUrl && /* @__PURE__ */ React$2.createElement("span", { className: "text-xs text-gray-500 dark:text-gray-500" }, "格式: ", inputType === "svg" ? "SVG" : outputFormat.toUpperCase(), outputFormat === "ico" && ` | 尺寸: ${outputSize}px`)), /* @__PURE__ */ React$2.createElement(
+    ))), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 flex flex-col gap-3 overflow-hidden" }, /* @__PURE__ */ React$2.createElement("div", { className: "bg-gray-50 dark:bg-gray-700 rounded-lg p-2.5" }, /* @__PURE__ */ React$2.createElement("div", { className: "flex items-center justify-between mb-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-xs font-medium text-gray-700 dark:text-gray-300" }, "预览"), previewUrl && /* @__PURE__ */ React$2.createElement("span", { className: "text-xs text-gray-500 dark:text-gray-500" }, "格式: ", inputType === "svg" ? "SVG" : outputFormat === "base64" ? "Base64" : outputFormat.toUpperCase(), outputFormat === "ico" && ` | 尺寸: ${outputSize}px`)), /* @__PURE__ */ React$2.createElement(
       "div",
       {
         className: "w-full h-56 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center overflow-hidden"
@@ -13103,7 +13178,14 @@
           style: { maxHeight: "100%", maxWidth: "100%" }
         }
       ) : /* @__PURE__ */ React$2.createElement("div", { className: "text-center" }, /* @__PURE__ */ React$2.createElement(Image$1, { className: "w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-1.5" }), /* @__PURE__ */ React$2.createElement("p", { className: "text-xs text-gray-500 dark:text-gray-500" }, "暂无预览"), /* @__PURE__ */ React$2.createElement("p", { className: "text-xs text-gray-400 dark:text-gray-600 mt-0.5" }, "请选择或加载图片"))
-    )), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-auto p-3" }, /* @__PURE__ */ React$2.createElement("h3", { className: "text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2" }, "使用说明"), /* @__PURE__ */ React$2.createElement("ul", { className: "space-y-1.5 text-xs text-gray-600 dark:text-gray-400" }, /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "1."), /* @__PURE__ */ React$2.createElement("span", null, "选择输入方式：本地图片、网络图片或SVG代码")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "2."), /* @__PURE__ */ React$2.createElement("span", null, "上传图片或输入URL/SVG代码，预览区会显示效果")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "3."), /* @__PURE__ */ React$2.createElement("span", null, "选择输出格式（PNG保持原尺寸，ICO可选择尺寸）")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "4."), /* @__PURE__ */ React$2.createElement("span", null, "选择保存目录（可选）")), /* @__PURE__ */ React$2.createElement("li", { className: "flex items-start gap-1.5" }, /* @__PURE__ */ React$2.createElement("span", { className: "text-blue-500" }, "5."), /* @__PURE__ */ React$2.createElement("span", null, '点击"转换并保存"按钮完成转换'))), /* @__PURE__ */ React$2.createElement("div", { className: "mt-3 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg" }, /* @__PURE__ */ React$2.createElement("h4", { className: "text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" }, "注意事项"), /* @__PURE__ */ React$2.createElement("ul", { className: "space-y-1 text-xs text-gray-500 dark:text-gray-500" }, /* @__PURE__ */ React$2.createElement("li", null, "- SVG代码必须包含完整的<svg>标签"), /* @__PURE__ */ React$2.createElement("li", null, "- 网络图片需要支持跨域访问（CORS）"), /* @__PURE__ */ React$2.createElement("li", null, "- PNG格式保持原图片尺寸，不进行缩放"), /* @__PURE__ */ React$2.createElement("li", null, "- ICO格式会自动生成多尺寸图标（16x16~256x256）"))))))));
+    )), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden flex flex-col" }, /* @__PURE__ */ React$2.createElement("div", { className: "flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-600" }, /* @__PURE__ */ React$2.createElement("h3", { className: "text-xs font-semibold text-gray-700 dark:text-gray-300" }, "Base64 编码结果"), base64Result && /* @__PURE__ */ React$2.createElement(
+      "button",
+      {
+        onClick: handleCopyBase64,
+        className: "flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-xs"
+      },
+      copied ? /* @__PURE__ */ React$2.createElement(React$2.Fragment, null, /* @__PURE__ */ React$2.createElement(Check, { className: "w-3 h-3" }), "已复制") : /* @__PURE__ */ React$2.createElement(React$2.Fragment, null, /* @__PURE__ */ React$2.createElement(Copy, { className: "w-3 h-3" }), "复制")
+    )), /* @__PURE__ */ React$2.createElement("div", { className: "flex-1 overflow-auto p-3" }, base64Result ? /* @__PURE__ */ React$2.createElement("pre", { className: "text-xs text-gray-700 dark:text-gray-300 font-mono break-all whitespace-pre-wrap select-all" }, base64Result) : /* @__PURE__ */ React$2.createElement("div", { className: "flex flex-col items-center justify-center h-full text-center" }, /* @__PURE__ */ React$2.createElement(Code, { className: "w-8 h-8 text-gray-300 dark:text-gray-600 mb-2" }), /* @__PURE__ */ React$2.createElement("p", { className: "text-xs text-gray-500 dark:text-gray-500" }, "暂无 Base64 结果"), /* @__PURE__ */ React$2.createElement("p", { className: "text-xs text-gray-400 dark:text-gray-600 mt-1" }, "选择输出格式为 Base64 后点击转换"))))))));
   };
   const PluginApp = () => {
     return React$2.createElement(ToolPanel);
@@ -13120,8 +13202,6 @@
     }
     if (ReactDOM.createRoot) {
       ReactDOM.createRoot(root2).render(React$2.createElement(PluginApp));
-    } else {
-      ReactDOM.render(React$2.createElement(PluginApp), root2);
     }
   }
   const pluginData = window.__PLUGIN_DATA__;
