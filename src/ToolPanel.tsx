@@ -478,7 +478,7 @@ const ToolPanel: FC = () => {
   }, [addToast, previewUrl]);
 
   return (
-    <div className="h-full flex flex-col p-3 overflow-hidden">
+    <div className="h-full flex flex-col p-3 overflow-hidden bg-white dark:bg-gray-800">
       <ToastContainer toasts={toasts} />
       
       <div className="flex items-center gap-2 mb-3">
@@ -539,10 +539,10 @@ const ToolPanel: FC = () => {
                     onChange={handleInputChange}
                     className="hidden"
                   />
-                  <Upload className="w-10 h-10 text-gray-400 dark:text-gray-500 mb-2" />
+                  <Upload className="w-10 h-10 text-gray-400 dark:text-gray-400 mb-2" />
                   <span className="text-xs text-gray-600 dark:text-gray-400">点击或拖拽上传</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">支持 JPG、PNG、GIF、SVG</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">或 Ctrl+V 粘贴剪贴板图片</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">支持 JPG、PNG、GIF、SVG</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">或 Ctrl+V 粘贴剪贴板图片</span>
                 </label>
               </div>
             )}
@@ -565,7 +565,7 @@ const ToolPanel: FC = () => {
                     <RefreshCw className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-500">按 Enter 快速加载</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">按 Enter 快速加载</p>
               </div>
             )}
 
@@ -585,7 +585,7 @@ const ToolPanel: FC = () => {
                   <Eye className="w-3.5 h-3.5" />
                   预览 SVG
                 </button>
-                <p className="text-xs text-gray-500 dark:text-gray-500">Ctrl/Cmd + Enter 预览</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Ctrl/Cmd + Enter 预览</p>
               </div>
             )}
 
@@ -700,7 +700,7 @@ const ToolPanel: FC = () => {
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-medium text-gray-700 dark:text-gray-300">预览</span>
                 {previewUrl && (
-                  <span className="text-xs text-gray-500 dark:text-gray-500">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
                     格式: {inputType === 'svg' ? 'SVG' : outputFormat === 'base64' ? 'Base64' : outputFormat.toUpperCase()}
                     {outputFormat === 'ico' && ` | 尺寸: ${outputSize}px`}
                   </span>
@@ -719,8 +719,8 @@ const ToolPanel: FC = () => {
                 ) : (
                   <div className="text-center">
                     <ImageIcon className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-1.5" />
-                    <p className="text-xs text-gray-500 dark:text-gray-500">暂无预览</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-600 mt-0.5">请选择或加载图片</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">暂无预览</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">请选择或加载图片</p>
                   </div>
                 )}
               </div>
@@ -756,8 +756,8 @@ const ToolPanel: FC = () => {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <Code className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-2" />
-                    <p className="text-xs text-gray-500 dark:text-gray-500">暂无 Base64 结果</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">选择输出格式为 Base64 后点击转换</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">暂无 Base64 结果</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">选择输出格式为 Base64 后点击转换</p>
                   </div>
                 )}
               </div>
